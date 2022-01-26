@@ -11,15 +11,17 @@
 using namespace std;
 using namespace cv;
 
-bool scaleSet = false;
-bool firstframe = true;
-float pixelsPerUnit = 0.0f;
-int scalePixels = 0;
-int scaleUnits = 50;
-int framesPerSecond = 30;
-int currentFrame = 0;
-string unitType = "microns";
-ofstream outfile;
+bool g_scaleSet = false;
+bool g_firstframe = true;
+float g_pixelsPerUnit = 0.0f;
+int g_scalePixels = 0;
+int g_scaleUnits = 50;
+int g_framesPerSecond = 30;
+int g_currentFrame = 0;
+string g_unitType = "microns";
+ofstream g_outfile;
+int g_threshold = -1;
+int g_frameskip = 1;
 
 float sqDistance(Point p1, Point p2);
 Vec4i getSeparatorLine(Point p1, Point p2);
@@ -39,16 +41,16 @@ bool process(Vec3i c1, Vec3i c2) {
 
     cout << endl;
 
-    float timeStamp = (float)currentFrame / (float)framesPerSecond;
+    float timeStamp = (float)g_currentFrame / (float)g_framesPerSecond;
     /*DEBUG*/ cout << "T=" << timeStamp << "\t";
 
     bool twoDroplets = true;							//NOT redundant, default, see below
     float rDistance = (float)sqrt((c2[0] - c1[0]) * (c2[0] - c1[0]) + (c2[1] - c1[1]) * (c2[1] - c1[1]));
-    /*DEBUG*/ cout << rDistance << "jp = " << (rDistance / pixelsPerUnit) << " " << unitType << "\t";
+    /*DEBUG*/ cout << rDistance << "jp = " << (rDistance / g_pixelsPerUnit) << " " << g_unitType << "\t";
     if ((rDistance * rDistance) >= ((c1[2] + c2[2]) * (c1[2] + c2[2]))) {
         cout << "Two unconnected droplets\t";
-        gv = (4 / 3) * MATH_PI * c1[2] * c1[2] * c1[2];
-        sv = (4 / 3) * MATH_PI * c2[2] * c2[2] * c2[2];
+        gv = (4.0f / 3.0f) * MATH_PI * (float)((long)c1[2] * (long)c1[2] * (long)c1[2]);
+        sv = (4.0f / 3.0f) * MATH_PI * (float)((long)c2[2] * (long)c2[2] * (long)c2[2]);
         //InformationPanel.volumeLabel.setText(to_string(gv + sv));
         tv = gv + sv;
         return true;
@@ -64,11 +66,11 @@ bool process(Vec3i c1, Vec3i c2) {
         ///*DEBUG*/			cout << "Switched circles\n";
     }
     ///*DEBUG*/			else cout << "No switch\n";
-    big /= pixelsPerUnit;	small /= pixelsPerUnit;	//needed for volume calculations
+    big /= g_pixelsPerUnit;	small /= g_pixelsPerUnit;	//needed for volume calculations
 
     if (twoDroplets) {	//circle-circle intersection
         //first correct distance for droplet orientation
-        float lf = rDistance / pixelsPerUnit;
+        float lf = rDistance / g_pixelsPerUnit;
         // lf is apparent distance, lr is distance after compensation for 3d
         float lr = (float)sqrt((big - small) * (big - small) + lf * lf);
         radialDistance = lr;
@@ -88,12 +90,12 @@ bool process(Vec3i c1, Vec3i c2) {
         //Dr. Lee wants half of the contact angle
         ///*DEBUG*/	cout << "New Method: " << rdib << ", " << to_string(180.0f * thetab / (float)MATH_PI) << endl;
         //this is circle-circle intersection viewing from above
-        float lr_pixels = lr * pixelsPerUnit;
+        float lr_pixels = lr * g_pixelsPerUnit;
         //this will cause the line denoting the circle-circle intersection to appear wrong
         float a = ((float)(c1[2] * c1[2]) - (float)(c2[2] * c2[2]) + (lr_pixels * lr_pixels)) / (2.0f * lr_pixels);
         float hi = (float)sqrt(c1[2] * c1[2] - a * a); float b = lr_pixels - a;
-        c1h = ((float)c1[2] - a) / pixelsPerUnit;
-        c2h = ((float)c2[2] - b) / pixelsPerUnit;	//for volume truncation later
+        c1h = ((float)c1[2] - a) / g_pixelsPerUnit;
+        c2h = ((float)c2[2] - b) / g_pixelsPerUnit;	//for volume truncation later
 
         float hx = (c2[0] - c1[0]) * (a / lr_pixels) + c1[0];
         float hy = (c2[1] - c1[1]) * (a / lr_pixels) + c1[1];
@@ -108,8 +110,8 @@ bool process(Vec3i c1, Vec3i c2) {
         float ia2 = (float)abs(acos(b / c2[2]));
         //source: http://stackoverflow.com/questions/3349125/circle-circle-intersection-points
 
-        gr = (float)c1[2] / (float)pixelsPerUnit;
-        sr = (float)c2[2] / (float)pixelsPerUnit;
+        gr = (float)c1[2] / (float)g_pixelsPerUnit;
+        sr = (float)c2[2] / (float)g_pixelsPerUnit;
         gv = ((float)MATH_PI * 4.0f * gr * gr * gr) / 3.0f;
         gv -= ((float)MATH_PI * c1h * (3.0f * rdib * rdib + c1h * c1h)) / 6.0f;
         //InformationPanel.growingVolume.setText(to_string(gv));
@@ -150,7 +152,7 @@ bool process(Vec3i c1, Vec3i c2) {
     }
 
 
-    outfile << timeStamp << "," << gr << "," << gv << "," << sr << "," << sv << "," << tv << "," << dibRadius << "," << contactAngle << "," << rDistance << ",\n";
+    g_outfile << timeStamp << "," << gr << "," << gv << "," << sr << "," << sv << "," << tv << "," << dibRadius << "," << contactAngle << "," << rDistance << ",\n";
 
     cout << "\nTime Stamp\tDroplet 1 Radius\tDroplet 1 Volume\tDroplet 2 Radius\tDroplet 2 Volume\tTotal Volume\tDIB Radius\tContact Angle\tRadial Distance\n";
     cout << timeStamp << "\t" << gr << "\t" << gv << "\t" << sr << "\t" << sv << "\t" << tv << "\t" << dibRadius << "\t" << contactAngle << "\t" << rDistance << "\n";
@@ -201,10 +203,10 @@ void showVideoFromFile(string fullPath) {
         cv::Mat frame;
         // Capture frame-by-frame
         cap >> frame;
-        currentFrame++;
+        g_currentFrame++;
 
         // Find scale line and set scale if not set already
-        if (!scaleSet) {
+        if (!g_scaleSet) {
 
             scaleFrameStartX = (float)frame.size().width * 0.5f;
             scaleFrameStartY = (float)frame.size().height * 0.8f;
@@ -242,13 +244,16 @@ void showVideoFromFile(string fullPath) {
                 }
             }
 
-            scalePixels = scaleLineEndC - scaleLineStartC;
-            pixelsPerUnit = (float)scalePixels / (float)scaleUnits;
+            g_scalePixels = scaleLineEndC - scaleLineStartC;
+            g_pixelsPerUnit = (float)g_scalePixels / (float)g_scaleUnits;
             cv::line(scaleFrame, Point(scaleLineStartC, scaleLineStartR), Point(scaleLineEndC, scaleLineStartR), Scalar(0, 0, 255), LINE_AA);
 
             //imshow("Scale Frame", scaleFrame);
-            scaleSet = true;
+            g_scaleSet = true;
         }
+
+        //skip frames
+        if (g_currentFrame % g_frameskip != 0 && validFrame) continue;
 
         // If the frame is empty, break immediately
         if (frame.empty())
@@ -261,7 +266,12 @@ void showVideoFromFile(string fullPath) {
         //cv::Mat circles = cv::Mat();
         cv::Scalar color = cv::Scalar(255, 0, 0);
         cv::cvtColor(frame, frame, cv::COLOR_RGBA2GRAY, 0);
-        double threshold = cv::threshold(frame, frame, 25, 255, THRESH_BINARY);// cv::THRESH_OTSU);
+        if (g_threshold == -1) {
+            double threshold = cv::threshold(frame, frame, 100, 255, cv::THRESH_OTSU);
+        }
+        else { //25
+            double threshold = cv::threshold(frame, frame, g_threshold, 255, THRESH_BINARY);
+        }
         // You can try more different parameters
         cv::HoughCircles(frame, circles, cv::HOUGH_GRADIENT, 3,
             10, 100, 50,
@@ -271,7 +281,7 @@ void showVideoFromFile(string fullPath) {
         validFrame = true;
         // draw 2 best circles
         // Take 2 best circles from Hough array and figure out which is which
-        if (firstframe) {
+        if (g_firstframe) {
             c1 = circles[0];
             c2 = circles[1];
             c1Last = c1;
@@ -292,7 +302,7 @@ void showVideoFromFile(string fullPath) {
                 }
                 process(c1, c2);
 
-                firstframe = false;
+                g_firstframe = false;
             }
         }
         else {
@@ -377,18 +387,21 @@ int main(int argc, char** argv)
     if (argc < 2) return -1;
     string fname = argv[1];
 
+    if (argc >= 3) g_frameskip = atoi(argv[2]);
+    if (argc >= 4) g_threshold = atoi(argv[3]);
+
     VideoCapture video(fname);
-    framesPerSecond = (int)video.get(CAP_PROP_FPS);
+    g_framesPerSecond = (int)video.get(CAP_PROP_FPS);
 
     string outfname = fname.substr(0, fname.find_last_of('.')) + ".csv";
 
-    outfile.open(outfname, ios::out);
-    outfile << "Time Stamp,Droplet 1 Radius,Droplet 1 Volume,Droplet 2 Radius,Droplet 2 Volume,Total Volume,DIB Radius,Contact Angle,Radial Distance,\n";
+    g_outfile.open(outfname, ios::out);
+    g_outfile << "Time Stamp,Droplet 1 Radius,Droplet 1 Volume,Droplet 2 Radius,Droplet 2 Volume,Total Volume,DIB Radius,Contact Angle,Radial Distance,\n";
 
     showVideoFromFile(fname);
     //showVideoFromFile("C:\\Users\\geoff\\source\\repos\\DropletShapeAnalysis\\DropletShapeAnalysis\\Test Videos\\WP 30C 4POPC 1CHOL 187mosm sqe016.mp4");
 
-    outfile.close();
+    g_outfile.close();
 
     return 0;
 }
