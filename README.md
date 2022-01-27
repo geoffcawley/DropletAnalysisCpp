@@ -1,5 +1,13 @@
 # DropletAnalysisCpp
 
+Running:
+
+from command prompt, run:
+DropletAnalysis.exe "filename.csv" [frameskip] [threshold 0-255]
+
+example:
+DropletAnalysis.exe "C:\Test Videos\WP 30C 4POPC 1CHOL 187mosm sqe016.mp4" 10 25
+
 OpenCV Setup:
 https://www.geeksforgeeks.org/opencv-c-windows-setup-using-visual-studio-2019/
 
