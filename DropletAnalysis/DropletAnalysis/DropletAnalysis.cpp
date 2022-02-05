@@ -61,11 +61,12 @@ bool process(Vec3i c1, Vec3i c2) {
     /*DEBUG*/	else cout << "One droplet with contact bilayer\t";
 
     float small = c1[2]; float big = c2[2];
-    if (c2[2] < c1[2]) {
-        small = c2[2]; big = c1[2]; //}
-        ///*DEBUG*/			cout << "Switched circles\n";
-    }
-    ///*DEBUG*/			else cout << "No switch\n";
+    // Not safe at this point to have computer decide which droplet is growing and which is shrinking
+    //if (c2[2] < c1[2]) {
+    //    small = c2[2]; big = c1[2]; //}
+    //    ///*DEBUG*/			cout << "Switched circles\n";
+    //}
+    /////*DEBUG*/			else cout << "No switch\n";
     big /= g_pixelsPerUnit;	small /= g_pixelsPerUnit;	//needed for volume calculations
 
     if (twoDroplets) {	//circle-circle intersection
@@ -293,11 +294,18 @@ void showVideoFromFile(string fullPath) {
             }
 
             if (validFrame) {
-                // create line perpendicular to line connecting circle centers
-                separatorLine = getSeparatorLine(Point(c1[0], c1[1]), Point(c2[0], c2[1]));
 
-                // make sure c1 is always above the separator line in point slope form
-                if ((c1[1] - separatorLine[3]) > (getSlope(separatorLine) * (c1[0] - separatorLine[2]))) {
+                // Separator line doesn't really work
+                //// create line perpendicular to line connecting circle centers
+                //separatorLine = getSeparatorLine(Point(c1[0], c1[1]), Point(c2[0], c2[1]));
+
+                //// make sure c1 is always above the separator line in point slope form
+                //if ((c1[1] - separatorLine[3]) > (getSlope(separatorLine) * (c1[0] - separatorLine[2]))) {
+                //    Vec3i c3 = c2; c2 = c1; c1 = c3;
+                //}
+                 
+                // make sure c2 is rightmost circle
+                if (c1[0] > c2[0]) {
                     Vec3i c3 = c2; c2 = c1; c1 = c3;
                 }
                 process(c1, c2);
@@ -319,13 +327,19 @@ void showVideoFromFile(string fullPath) {
                 separatorLineLast = separatorLine;
                 separatorLine = getSeparatorLine(Point(c1[0], c1[1]), Point(c2[0], c2[1]));
 
+                // Separator line doesn't really work
                 //// make sure c1 is always above the separator line in point slope form
                 //if ((c1[1] - separatorLineLast[3]) > (getSlope(separatorLineLast) * (c1[0] - separatorLineLast[2]))) {
                 //    Vec3i c3 = c2; c2 = c1; c1 = c3;
                 //}
 
-                // swap circles based on distance from circles in previous frame
-                if (sqDistance(Point(c1[0], c1[1]), Point(c1Last[0], c1Last[1])) > sqDistance(Point(c2[0], c2[1]), Point(c1Last[0], c1Last[1]))) {
+                //// swap circles based on distance from circles in previous frame
+                //if (sqDistance(Point(c1[0], c1[1]), Point(c1Last[0], c1Last[1])) > sqDistance(Point(c2[0], c2[1]), Point(c1Last[0], c1Last[1]))) {
+                //    Vec3i c3 = c2; c2 = c1; c1 = c3;
+                //}
+
+                // make sure c2 is rightmost circle
+                if (c1[0] > c2[0]) {
                     Vec3i c3 = c2; c2 = c1; c1 = c3;
                 }
                 process(c1, c2);
