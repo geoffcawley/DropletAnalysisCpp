@@ -267,21 +267,22 @@ void showVideoFromFile(string fullPath) {
         //cv::Mat circles = cv::Mat();
         cv::Scalar color = cv::Scalar(255, 0, 0);
         cv::cvtColor(frame, frame, cv::COLOR_RGBA2GRAY, 0);
+        // crop timestamp and scale bar from bottom of video so Otsu works
+        Mat measureFrame = frame(Rect(0, 0, (float)frame.size().width - 1.0f, ((float)frame.size().height * 0.875f) - 1));
         if (g_threshold == -1) {
-            double threshold = cv::threshold(frame, frame, 100, 255, cv::THRESH_OTSU);
+            double threshold = cv::threshold(measureFrame, measureFrame, 100, 255, cv::THRESH_OTSU);
         }
         else { //25
-            double threshold = cv::threshold(frame, frame, g_threshold, 255, THRESH_BINARY);
+            double threshold = cv::threshold(measureFrame, measureFrame, g_threshold, 255, THRESH_BINARY);
         }
-        // You can try more different parameters
-        cv::HoughCircles(frame, circles, cv::HOUGH_GRADIENT, 3,
+        cv::HoughCircles(measureFrame, circles, cv::HOUGH_GRADIENT, 3,
             10, 100, 50,
-            frame.rows / 10, frame.rows / 4);
+            measureFrame.rows / 10, measureFrame.rows / 4);
         cv::cvtColor(frame, frame, cv::COLOR_GRAY2RGB, 0);
-
         validFrame = true;
         // draw 2 best circles
         // Take 2 best circles from Hough array and figure out which is which
+        if (circles.size() < 2) continue;
         if (g_firstframe) {
             c1 = circles[0];
             c2 = circles[1];
