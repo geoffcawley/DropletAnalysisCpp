@@ -23,6 +23,12 @@ ofstream g_outfile;
 int g_threshold = -1;
 int g_frameskip = 1;
 
+
+int g_scaleFrameStartX, g_scaleFrameStartY, g_scaleFrameEndX, g_scaleFrameEndY;
+
+int g_scaleLineLength = 0;
+int g_scaleLineStartR, g_scaleLineStartC, g_scaleLineEndC;
+
 float sqDistance(Point p1, Point p2);
 Vec4i getSeparatorLine(Point p1, Point p2);
 float getSlope(Vec4i line);
@@ -191,10 +197,10 @@ void showVideoFromFile(string fullPath) {
 
     bool validFrame = true;
 
-    int scaleFrameStartX, scaleFrameStartY, scaleFrameEndX, scaleFrameEndY;
+    //int scaleFrameStartX, scaleFrameStartY, scaleFrameEndX, scaleFrameEndY;
 
-    int scaleLineLength = 0;
-    int scaleLineStartR, scaleLineStartC, scaleLineEndC;
+    //int scaleLineLength = 0;
+    //int scaleLineStartR, scaleLineStartC, scaleLineEndC;
 
     Vec3i c1, c2, c1Last, c2Last;
     Vec4i separatorLine, separatorLineLast;
@@ -209,11 +215,11 @@ void showVideoFromFile(string fullPath) {
         // Find scale line and set scale if not set already
         if (!g_scaleSet) {
 
-            scaleFrameStartX = (float)frame.size().width * 0.5f;
-            scaleFrameStartY = (float)frame.size().height * 0.8f;
-            scaleFrameEndX = ((float)frame.size().width * 0.5f) - 1;
-            scaleFrameEndY = ((float)frame.size().height * 0.2f) - 1;
-            Mat scaleFrame = frame(Rect(scaleFrameStartX, scaleFrameStartY, scaleFrameEndX, scaleFrameEndY));
+            g_scaleFrameStartX = (float)frame.size().width * 0.5f;
+            g_scaleFrameStartY = (float)frame.size().height * 0.8f;
+            g_scaleFrameEndX = ((float)frame.size().width * 0.5f) - 1;
+            g_scaleFrameEndY = ((float)frame.size().height * 0.2f) - 1;
+            Mat scaleFrame = frame(Rect(g_scaleFrameStartX, g_scaleFrameStartY, g_scaleFrameEndX, g_scaleFrameEndY));
             cv::cvtColor(scaleFrame, scaleFrame, COLOR_BGR2GRAY);
             cv::threshold(scaleFrame, scaleFrame, 100, 255, THRESH_OTSU);
             bitwise_not(scaleFrame, scaleFrame);
@@ -235,19 +241,19 @@ void showVideoFromFile(string fullPath) {
                             break;
                         }
                         thisBlackLineLength++;
-                        if (thisBlackLineLength > scaleLineLength) {
-                            scaleLineLength = thisBlackLineLength;
-                            scaleLineStartR = r;
-                            scaleLineStartC = thisLineStart;
-                            scaleLineEndC = c;
+                        if (thisBlackLineLength > g_scaleLineLength) {
+                            g_scaleLineLength = thisBlackLineLength;
+                            g_scaleLineStartR = r;
+                            g_scaleLineStartC = thisLineStart;
+                            g_scaleLineEndC = c;
                         }
                     }
                 }
             }
 
-            g_scalePixels = scaleLineEndC - scaleLineStartC;
+            g_scalePixels = g_scaleLineEndC - g_scaleLineStartC;
             g_pixelsPerUnit = (float)g_scalePixels / (float)g_scaleUnits;
-            cv::line(scaleFrame, Point(scaleLineStartC, scaleLineStartR), Point(scaleLineEndC, scaleLineStartR), Scalar(0, 0, 255), LINE_AA);
+            cv::line(scaleFrame, Point(g_scaleLineStartC, g_scaleLineStartR), Point(g_scaleLineEndC, g_scaleLineStartR), Scalar(0, 0, 255), LINE_AA);
 
             //imshow("Scale Frame", scaleFrame);
             g_scaleSet = true;
@@ -372,8 +378,8 @@ void showVideoFromFile(string fullPath) {
         }
 
         // draw scale line in red
-        cv::line(frame, Point(scaleFrameStartX + scaleLineStartC, scaleFrameStartY + scaleLineStartR), Point(scaleFrameStartX + scaleLineEndC, scaleFrameStartY + scaleLineStartR), Scalar(0, 0, 255), LINE_AA);
-        cv::line(originalFrame, Point(scaleFrameStartX + scaleLineStartC, scaleFrameStartY + scaleLineStartR), Point(scaleFrameStartX + scaleLineEndC, scaleFrameStartY + scaleLineStartR), Scalar(0, 0, 255), LINE_AA);
+        cv::line(frame, Point(g_scaleFrameStartX + g_scaleLineStartC, g_scaleFrameStartY + g_scaleLineStartR), Point(g_scaleFrameStartX + g_scaleLineEndC, g_scaleFrameStartY + g_scaleLineStartR), Scalar(0, 0, 255), LINE_AA);
+        cv::line(originalFrame, Point(g_scaleFrameStartX + g_scaleLineStartC, g_scaleFrameStartY + g_scaleLineStartR), Point(g_scaleFrameStartX + g_scaleLineEndC, g_scaleFrameStartY + g_scaleLineStartR), Scalar(0, 0, 255), LINE_AA);
 
         // Display the resulting frame
         int window_width = 800;
@@ -404,6 +410,27 @@ int main(int argc, char** argv)
 
     if (argc >= 3) g_frameskip = atoi(argv[2]);
     if (argc >= 4) g_threshold = atoi(argv[3]);
+
+    for (int i = 0; i < argc; i++) {
+        std::string arg(argv[i]);
+        if (arg == "-o" || arg == "--olympus") {
+
+            g_scaleFrameStartX = 1675;
+            g_scaleFrameStartY = 1122;
+            g_scaleFrameEndX = 1905;
+            g_scaleFrameEndY = 1186;
+
+            g_scaleLineLength = 216;
+            g_scaleLineStartR = 1127;
+            g_scaleLineStartC = 1684;
+            g_scaleLineEndC = 1900;
+
+            g_scalePixels = g_scaleLineEndC - g_scaleLineStartC;
+            g_pixelsPerUnit = (float)g_scalePixels / (float)g_scaleUnits;
+
+            g_scaleSet = true;
+        }
+    }
 
     VideoCapture video(fname);
     g_framesPerSecond = (int)video.get(CAP_PROP_FPS);
