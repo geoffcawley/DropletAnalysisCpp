@@ -23,6 +23,7 @@ ofstream g_outfile;
 int g_threshold = -1;
 int g_frameskip = 1;
 
+string g_inFileName = "Droplet Analysis";
 
 int g_scaleFrameStartX, g_scaleFrameStartY, g_scaleFrameEndX, g_scaleFrameEndY;
 
@@ -34,8 +35,8 @@ Vec4i getSeparatorLine(Point p1, Point p2);
 float getSlope(Vec4i line);
 bool circlesInsideEachOther(Vec3i c1, Vec3i c2);
 
-
-//Time Stamp	 Adjusted Time	 Droplet 1 Radius	 Droplet 1 Volume	 Droplet 2 Radius	 Droplet 2 Volume	 Total Volume	 DIB Radius	 Contact Angle	 Radial Distance
+//Output headers:
+//Time Stamp, Adjusted Time, Droplet 1 Radius, Droplet 1 Volume, Droplet 2 Radius, Droplet 2 Volume, Total Volume, DIB Radius, Contact Angle, Radial Distance
 //Takes circles in pixels, conversion to units done within this method
 bool process(Vec3i c1, Vec3i c2) {
     float gv, sv, tv;
@@ -50,14 +51,13 @@ bool process(Vec3i c1, Vec3i c2) {
     float timeStamp = (float)g_currentFrame / (float)g_framesPerSecond;
     /*DEBUG*/ cout << "T=" << timeStamp << "\t";
 
-    bool twoDroplets = true;							//NOT redundant, default, see below
+    bool twoDroplets = true;
     float rDistance = (float)sqrt((c2[0] - c1[0]) * (c2[0] - c1[0]) + (c2[1] - c1[1]) * (c2[1] - c1[1]));
     /*DEBUG*/ cout << rDistance << "jp = " << (rDistance / g_pixelsPerUnit) << " " << g_unitType << "\t";
     if ((rDistance * rDistance) >= ((c1[2] + c2[2]) * (c1[2] + c2[2]))) {
         cout << "Two unconnected droplets\t";
         gv = (4.0f / 3.0f) * MATH_PI * (float)((long)c1[2] * (long)c1[2] * (long)c1[2]);
         sv = (4.0f / 3.0f) * MATH_PI * (float)((long)c2[2] * (long)c2[2] * (long)c2[2]);
-        //InformationPanel.volumeLabel.setText(to_string(gv + sv));
         tv = gv + sv;
         return true;
     }
@@ -67,12 +67,6 @@ bool process(Vec3i c1, Vec3i c2) {
     /*DEBUG*/	else cout << "One droplet with contact bilayer\t";
 
     float small = c1[2]; float big = c2[2];
-    // Not safe at this point to have computer decide which droplet is growing and which is shrinking
-    //if (c2[2] < c1[2]) {
-    //    small = c2[2]; big = c1[2]; //}
-    //    ///*DEBUG*/			cout << "Switched circles\n";
-    //}
-    /////*DEBUG*/			else cout << "No switch\n";
     big /= g_pixelsPerUnit;	small /= g_pixelsPerUnit;	//needed for volume calculations
 
     if (twoDroplets) {	//circle-circle intersection
@@ -81,7 +75,6 @@ bool process(Vec3i c1, Vec3i c2) {
         // lf is apparent distance, lr is distance after compensation for 3d
         float lr = (float)sqrt((big - small) * (big - small) + lf * lf);
         radialDistance = lr;
-        //InformationPanel.distanceLabel.setText(to_string(lr));
         //then do math
                             //the following is from that droplet shape paper
         float thetab = (float)acos(
@@ -92,10 +85,7 @@ bool process(Vec3i c1, Vec3i c2) {
         //InformationPanel.dibRadius.setText(to_string(rdib));// / pixelsPerUnit));
         dibRadius = rdib;
         float theta_degrees = 180.0f * thetab / (float)MATH_PI; theta_degrees /= 2.0f;
-        //InformationPanel.contactAngle.setText(to_string(theta_degrees));
         contactAngle = theta_degrees;
-        //Dr. Lee wants half of the contact angle
-        ///*DEBUG*/	cout << "New Method: " << rdib << ", " << to_string(180.0f * thetab / (float)MATH_PI) << endl;
         //this is circle-circle intersection viewing from above
         float lr_pixels = lr * g_pixelsPerUnit;
         //this will cause the line denoting the circle-circle intersection to appear wrong
@@ -106,7 +96,6 @@ bool process(Vec3i c1, Vec3i c2) {
 
         float hx = (c2[0] - c1[0]) * (a / lr_pixels) + c1[0];
         float hy = (c2[1] - c1[1]) * (a / lr_pixels) + c1[1];
-        //Point P2 = P1.sub(P0).scale(a/d).add(P0);
         i1x = hx + (hi * (float)(c2[1] - c1[1]) / lr_pixels);
         i1y = hy - (hi * (float)(c2[0] - c1[0]) / lr_pixels);
         i2x = hx - (hi * (float)(c2[1] - c1[1]) / lr_pixels);
@@ -121,11 +110,9 @@ bool process(Vec3i c1, Vec3i c2) {
         sr = (float)c2[2] / (float)g_pixelsPerUnit;
         gv = ((float)MATH_PI * 4.0f * gr * gr * gr) / 3.0f;
         gv -= ((float)MATH_PI * c1h * (3.0f * rdib * rdib + c1h * c1h)) / 6.0f;
-        //InformationPanel.growingVolume.setText(to_string(gv));
 
         sv = ((float)MATH_PI * 4.0f * sr * sr * sr) / 3.0f;
         sv -= ((float)MATH_PI * c2h * (3.0f * rdib * rdib + c2h * c2h)) / 6.0f;
-        //InformationPanel.shrinkingVolume.setText(to_string(sv));
 
         ///*DEBUG*/ cout << gr << "\t" << rdib << "\t" << c1h << endl;
         ///*DEBUG*/ cout << sr << "\t" << rdib << "\t" << c2h << endl;
@@ -135,7 +122,6 @@ bool process(Vec3i c1, Vec3i c2) {
         v -= ((float)MATH_PI * c1h * (3.0f * rdib * rdib + c1h * c1h)) / 6.0f;	//subtract DIB overlap
         v -= ((float)MATH_PI * c2h * (3.0f * rdib * rdib + c2h * c2h)) / 6.0f;
         tv = v;
-        //InformationPanel.volumeLabel.setText(to_string(v));
     }
     else {			//circle-surface intersection
         if (c1[2] == c2[2]) return false;
@@ -145,16 +131,12 @@ bool process(Vec3i c1, Vec3i c2) {
         float y = (float)sqrt((big * big) - (small * small));
         float yp = -1.0f * (small / y);
         float theta = (float)abs(atan(yp));
-        //InformationPanel.contactAngle.setText(to_string(180.0f * theta / (float)MATH_PI));
 
         //dome & volume calculations
         float h_dome = big - y;
         float v_dome = ((float)MATH_PI * h_dome * (3.0f * small * small + h_dome * h_dome)) / 6.0f;
         float v = ((float)MATH_PI * 4.0f * big * big * big) / 3.0f;
         v -= v_dome;
-        //InformationPanel.growingVolume.setText(to_string(v));
-        //InformationPanel.shrinkingVolume.setText("N/A");
-        //InformationPanel.volumeLabel.setText(to_string(v));
         tv = v;
     }
 
@@ -196,11 +178,6 @@ void showVideoFromFile(string fullPath) {
     }
 
     bool validFrame = true;
-
-    //int g_scaleFrameStartX, g_scaleFrameStartY, g_scaleFrameEndX, g_scaleFrameEndY;
-
-    //int g_scaleLineLength = 0;
-    //int g_scaleLineStartR, g_scaleLineStartC, g_scaleLineEndC;
 
     Vec3i c1, c2, c1Last, c2Last;
     Vec4i separatorLine, separatorLineLast;
@@ -256,7 +233,7 @@ void showVideoFromFile(string fullPath) {
             g_pixelsPerUnit = (float)g_scalePixels / (float)g_scaleUnits;
             cv::line(scaleFrame, Point(g_scaleLineStartC, g_scaleLineStartR), Point(g_scaleLineEndC, g_scaleLineStartR), Scalar(0, 0, 255), LINE_AA);
 
-            imshow("Scale Frame", scaleFrame);
+            //imshow("Scale Frame", scaleFrame);
             g_scaleSet = true;
         }
 
@@ -302,16 +279,6 @@ void showVideoFromFile(string fullPath) {
             }
 
             if (validFrame) {
-
-                // Separator line doesn't really work
-                //// create line perpendicular to line connecting circle centers
-                //separatorLine = getSeparatorLine(Point(c1[0], c1[1]), Point(c2[0], c2[1]));
-
-                //// make sure c1 is always above the separator line in point slope form
-                //if ((c1[1] - separatorLine[3]) > (getSlope(separatorLine) * (c1[0] - separatorLine[2]))) {
-                //    Vec3i c3 = c2; c2 = c1; c1 = c3;
-                //}
-                 
                 // make sure c2 is rightmost circle
                 if (c1[0] > c2[0]) {
                     Vec3i c3 = c2; c2 = c1; c1 = c3;
@@ -327,24 +294,11 @@ void showVideoFromFile(string fullPath) {
             }
 
             if (validFrame) {
-                c1Last = c1;
-                c2Last = c2;
+                c1Last = c1; c2Last = c2;
+                c1 = circles[0]; c2 = circles[1];
 
-                c1 = circles[0];
-                c2 = circles[1];
                 separatorLineLast = separatorLine;
                 separatorLine = getSeparatorLine(Point(c1[0], c1[1]), Point(c2[0], c2[1]));
-
-                // Separator line doesn't really work
-                //// make sure c1 is always above the separator line in point slope form
-                //if ((c1[1] - separatorLineLast[3]) > (getSlope(separatorLineLast) * (c1[0] - separatorLineLast[2]))) {
-                //    Vec3i c3 = c2; c2 = c1; c1 = c3;
-                //}
-
-                //// swap circles based on distance from circles in previous frame
-                //if (sqDistance(Point(c1[0], c1[1]), Point(c1Last[0], c1Last[1])) > sqDistance(Point(c2[0], c2[1]), Point(c1Last[0], c1Last[1]))) {
-                //    Vec3i c3 = c2; c2 = c1; c1 = c3;
-                //}
 
                 // make sure c2 is rightmost circle
                 if (c1[0] > c2[0]) {
@@ -389,7 +343,7 @@ void showVideoFromFile(string fullPath) {
 
         //change first param to frame for the working frame, originalFrame for export
         cv::resize(frame, resized_frame, cv::Size(window_width, window_height), cv::INTER_LINEAR);
-        cv::imshow("Frame", resized_frame);
+        cv::imshow(g_inFileName, resized_frame);
 
         // Press  ESC on keyboard to exit
         char c = (char)cv::waitKey(25);
@@ -408,6 +362,9 @@ int main(int argc, char** argv)
 {
     if (argc < 2) return -1;
     string fname = argv[1];
+    int n = fname.length();
+    while (0 < n && fname[--n] != '\\');
+    g_inFileName = fname.substr(n+1);
 
     if (argc >= 3) g_frameskip = atoi(argv[2]);
     if (argc >= 4) g_threshold = atoi(argv[3]);
@@ -442,7 +399,6 @@ int main(int argc, char** argv)
     g_outfile << "Time Stamp,Droplet 1 Radius,Droplet 1 Volume,Droplet 2 Radius,Droplet 2 Volume,Total Volume,DIB Radius,Contact Angle,Radial Distance,\n";
 
     showVideoFromFile(fname);
-    //showVideoFromFile("C:\\Users\\geoff\\source\\repos\\DropletShapeAnalysis\\DropletShapeAnalysis\\Test Videos\\WP 30C 4POPC 1CHOL 187mosm sqe016.mp4");
 
     g_outfile.close();
 
