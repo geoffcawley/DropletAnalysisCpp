@@ -197,10 +197,10 @@ void showVideoFromFile(string fullPath) {
 
     bool validFrame = true;
 
-    //int scaleFrameStartX, scaleFrameStartY, scaleFrameEndX, scaleFrameEndY;
+    //int g_scaleFrameStartX, g_scaleFrameStartY, g_scaleFrameEndX, g_scaleFrameEndY;
 
-    //int scaleLineLength = 0;
-    //int scaleLineStartR, scaleLineStartC, scaleLineEndC;
+    //int g_scaleLineLength = 0;
+    //int g_scaleLineStartR, g_scaleLineStartC, g_scaleLineEndC;
 
     Vec3i c1, c2, c1Last, c2Last;
     Vec4i separatorLine, separatorLineLast;
@@ -214,11 +214,12 @@ void showVideoFromFile(string fullPath) {
 
         // Find scale line and set scale if not set already
         if (!g_scaleSet) {
-
-            g_scaleFrameStartX = (float)frame.size().width * 0.5f;
-            g_scaleFrameStartY = (float)frame.size().height * 0.8f;
-            g_scaleFrameEndX = ((float)frame.size().width * 0.5f) - 1;
-            g_scaleFrameEndY = ((float)frame.size().height * 0.2f) - 1;
+            float scaleFrameXRatio = 0.7;
+            float scaleFrameYRatio = 0.8;
+            g_scaleFrameStartX = (float)frame.size().width * scaleFrameXRatio;
+            g_scaleFrameStartY = (float)frame.size().height * scaleFrameYRatio;
+            g_scaleFrameEndX = ((float)frame.size().width * (1 - scaleFrameXRatio)) - 1;
+            g_scaleFrameEndY = ((float)frame.size().height * (1 - scaleFrameYRatio)) - 1;
             Mat scaleFrame = frame(Rect(g_scaleFrameStartX, g_scaleFrameStartY, g_scaleFrameEndX, g_scaleFrameEndY));
             cv::cvtColor(scaleFrame, scaleFrame, COLOR_BGR2GRAY);
             cv::threshold(scaleFrame, scaleFrame, 100, 255, THRESH_OTSU);
@@ -255,7 +256,7 @@ void showVideoFromFile(string fullPath) {
             g_pixelsPerUnit = (float)g_scalePixels / (float)g_scaleUnits;
             cv::line(scaleFrame, Point(g_scaleLineStartC, g_scaleLineStartR), Point(g_scaleLineEndC, g_scaleLineStartR), Scalar(0, 0, 255), LINE_AA);
 
-            //imshow("Scale Frame", scaleFrame);
+            imshow("Scale Frame", scaleFrame);
             g_scaleSet = true;
         }
 
