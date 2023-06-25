@@ -273,7 +273,6 @@ void showVideoFromFile(string fullPath) {
             c1Last = c1;
             c2Last = c2;
 
-            //TODO: if this frame is invalid skip it or something
             if (circlesInsideEachOther(c1, c2)) {
                 validFrame = false;
             }
@@ -366,10 +365,10 @@ int main(int argc, char** argv)
     while (0 < n && fname[--n] != '\\');
     g_inFileName = fname.substr(n+1);
 
-    if (argc >= 3) g_frameskip = atoi(argv[2]);
-    if (argc >= 4) g_threshold = atoi(argv[3]);
+    //if (argc >= 3) g_frameskip = atoi(argv[2]);
+    //if (argc >= 4) g_threshold = atoi(argv[3]);
 
-    for (int i = 0; i < argc; i++) {
+    for (int i = 2; i < argc; i++) {
         std::string arg(argv[i]);
         if (arg == "-o" || arg == "--olympus") {
 
@@ -387,6 +386,14 @@ int main(int argc, char** argv)
             g_pixelsPerUnit = (float)g_scalePixels / (float)g_scaleUnits;
 
             g_scaleSet = true;
+        }
+        if (arg == "-s" || arg == "--frameskip") {
+            //int fs = atoi(argv[++i]);
+            g_frameskip = atoi(argv[++i]);
+            if (g_frameskip == 0) g_frameskip = 1;
+        }
+        if (arg == "-t" || arg == "--threshold") {
+            g_threshold = atoi(argv[++i]);
         }
     }
 
