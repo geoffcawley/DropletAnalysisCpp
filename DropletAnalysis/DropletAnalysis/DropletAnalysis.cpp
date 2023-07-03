@@ -51,6 +51,10 @@ bool process(Vec3i c1, Vec3i c2) {
     float timeStamp = (float)g_currentFrame / (float)g_framesPerSecond;
     /*DEBUG*/ cout << "T=" << timeStamp << "\t";
 
+    if (timeStamp >= 37.0f) {
+        cout << "breaking here";
+    }
+
     bool twoDroplets = true;
     float rDistance = (float)sqrt((c2[0] - c1[0]) * (c2[0] - c1[0]) + (c2[1] - c1[1]) * (c2[1] - c1[1]));
     /*DEBUG*/ cout << rDistance << "jp = " << (rDistance / g_pixelsPerUnit) << " " << g_unitType << "\t";
@@ -182,172 +186,188 @@ void showVideoFromFile(string fullPath) {
     Vec3i c1, c2, c1Last, c2Last;
     Vec4i separatorLine, separatorLineLast;
 
-    while (1) {
+    while (cap.isOpened()) {
+        try {
+            cv::Mat frame;
+            // Capture frame-by-frame
+            cap.read(frame);
+            g_currentFrame++;
 
-        cv::Mat frame;
-        // Capture frame-by-frame
-        cap >> frame;
-        g_currentFrame++;
+            // Find scale line and set scale if not set already
+            if (!g_scaleSet) {
+                float scaleFrameXRatio = 0.7;
+                float scaleFrameYRatio = 0.8;
+                /*g_scaleFrameStartX = (float)frame.size().width * scaleFrameXRatio;
+                g_scaleFrameStartY = (float)frame.size().height * scaleFrameYRatio;
+                g_scaleFrameEndX = ((float)frame.size().width * (1 - scaleFrameXRatio)) - 1;
+                g_scaleFrameEndY = ((float)frame.size().height * (1 - scaleFrameYRatio)) - 1;
+                Mat scaleFrame = frame(Rect(g_scaleFrameStartX, g_scaleFrameStartY, g_scaleFrameEndX, g_scaleFrameEndY));
+                cv::cvtColor(scaleFrame, scaleFrame, COLOR_BGR2GRAY);
+                cv::threshold(scaleFrame, scaleFrame, 100, 255, THRESH_OTSU);
+                bitwise_not(scaleFrame, scaleFrame);*/
 
-        // Find scale line and set scale if not set already
-        if (!g_scaleSet) {
-            float scaleFrameXRatio = 0.7;
-            float scaleFrameYRatio = 0.8;
-            g_scaleFrameStartX = (float)frame.size().width * scaleFrameXRatio;
-            g_scaleFrameStartY = (float)frame.size().height * scaleFrameYRatio;
-            g_scaleFrameEndX = ((float)frame.size().width * (1 - scaleFrameXRatio)) - 1;
-            g_scaleFrameEndY = ((float)frame.size().height * (1 - scaleFrameYRatio)) - 1;
-            Mat scaleFrame = frame(Rect(g_scaleFrameStartX, g_scaleFrameStartY, g_scaleFrameEndX, g_scaleFrameEndY));
-            cv::cvtColor(scaleFrame, scaleFrame, COLOR_BGR2GRAY);
-            cv::threshold(scaleFrame, scaleFrame, 100, 255, THRESH_OTSU);
-            bitwise_not(scaleFrame, scaleFrame);
+                g_scaleFrameStartX = 0;
+                g_scaleFrameStartY = 0;
+                g_scaleFrameEndX = ((float)frame.size().width) - 1;
+                g_scaleFrameEndY = ((float)frame.size().height) - 1;
+                Mat scaleFrame = frame(Rect(g_scaleFrameStartX, g_scaleFrameStartY, g_scaleFrameEndX, g_scaleFrameEndY));
+                cv::cvtColor(scaleFrame, scaleFrame, COLOR_BGR2GRAY);
+                cv::threshold(scaleFrame, scaleFrame, 254, 255, THRESH_BINARY);
+                bitwise_not(scaleFrame, scaleFrame);
 
-            for (int r = 0; r < scaleFrame.rows; r++) {
-                bool foundblack = false;
-                int thisBlackLineLength = 0;
-                int thisLineStart = 0;
-                for (int c = 0; c < scaleFrame.cols; c++) {
-                    if (!foundblack) {
-                        if (scaleFrame.at<uchar>(r, c) == 0) {
-                            thisLineStart = c;
+
+                for (int r = 0; r < scaleFrame.rows; r++) {
+                    bool foundblack = false;
+                    int thisBlackLineLength = 0;
+                    int thisLineStart = 0;
+                    for (int c = 0; c < scaleFrame.cols; c++) {
+                        if (!foundblack) {
+                            if (scaleFrame.at<uchar>(r, c) == 0) {
+                                thisLineStart = c;
+                                thisBlackLineLength++;
+                                foundblack = true;
+                            }
+                        }
+                        else if (foundblack) {
+                            if (scaleFrame.at<uchar>(r, c) != 0) {
+                                break;
+                            }
                             thisBlackLineLength++;
-                            foundblack = true;
-                        }
-                    }
-                    else if (foundblack) {
-                        if (scaleFrame.at<uchar>(r, c) != 0) {
-                            break;
-                        }
-                        thisBlackLineLength++;
-                        if (thisBlackLineLength > g_scaleLineLength) {
-                            g_scaleLineLength = thisBlackLineLength;
-                            g_scaleLineStartR = r;
-                            g_scaleLineStartC = thisLineStart;
-                            g_scaleLineEndC = c;
+                            if (thisBlackLineLength > g_scaleLineLength) {
+                                g_scaleLineLength = thisBlackLineLength;
+                                g_scaleLineStartR = r;
+                                g_scaleLineStartC = thisLineStart;
+                                g_scaleLineEndC = c;
+                            }
                         }
                     }
                 }
+
+                g_scalePixels = g_scaleLineEndC - g_scaleLineStartC;
+                g_pixelsPerUnit = (float)g_scalePixels / (float)g_scaleUnits;
+                cv::line(scaleFrame, Point(g_scaleLineStartC, g_scaleLineStartR), Point(g_scaleLineEndC, g_scaleLineStartR), Scalar(0, 0, 255), LINE_AA);
+
+                imshow("Scale Frame", scaleFrame);
+                g_scaleSet = true;
             }
 
-            g_scalePixels = g_scaleLineEndC - g_scaleLineStartC;
-            g_pixelsPerUnit = (float)g_scalePixels / (float)g_scaleUnits;
-            cv::line(scaleFrame, Point(g_scaleLineStartC, g_scaleLineStartR), Point(g_scaleLineEndC, g_scaleLineStartR), Scalar(0, 0, 255), LINE_AA);
+            //skip frames
+            if (g_currentFrame % g_frameskip != 0 && validFrame) continue;
 
-            //imshow("Scale Frame", scaleFrame);
-            g_scaleSet = true;
-        }
-
-        //skip frames
-        if (g_currentFrame % g_frameskip != 0 && validFrame) continue;
-
-        // If the frame is empty, break immediately
-        if (frame.empty())
-            break;
-
-        Mat originalFrame = frame;
-        Mat dst = Mat::zeros(frame.rows, frame.cols, CV_8U);
-
-        vector<cv::Vec3f> circles;
-        //cv::Mat circles = cv::Mat();
-        cv::Scalar color = cv::Scalar(255, 0, 0);
-        cv::cvtColor(frame, frame, cv::COLOR_RGBA2GRAY, 0);
-        // crop timestamp and scale bar from bottom of video so Otsu works
-        Mat measureFrame = frame(Rect(0, 0, (float)frame.size().width - 1.0f, ((float)frame.size().height * 0.875f) - 1));
-        if (g_threshold == -1) {
-            double threshold = cv::threshold(measureFrame, measureFrame, 100, 255, cv::THRESH_OTSU);
-        }
-        else { //25
-            double threshold = cv::threshold(measureFrame, measureFrame, g_threshold, 255, THRESH_BINARY);
-        }
-        cv::HoughCircles(measureFrame, circles, cv::HOUGH_GRADIENT, 3,
-            10, 100, 50,
-            measureFrame.rows / 10, measureFrame.rows / 4);
-        cv::cvtColor(frame, frame, cv::COLOR_GRAY2RGB, 0);
-        validFrame = true;
-        // draw 2 best circles
-        // Take 2 best circles from Hough array and figure out which is which
-        if (circles.size() < 2) continue;
-        if (g_firstframe) {
-            c1 = circles[0];
-            c2 = circles[1];
-            c1Last = c1;
-            c2Last = c2;
-
-            if (circlesInsideEachOther(c1, c2)) {
-                validFrame = false;
+            // If the frame is empty, break immediately
+            if (frame.empty()) {
+                std::cout << "Error: blank frame";
+                break;
             }
 
-            if (validFrame) {
-                // make sure c2 is rightmost circle
-                if (c1[0] > c2[0]) {
-                    Vec3i c3 = c2; c2 = c1; c1 = c3;
+            Mat originalFrame = frame;
+            Mat dst = Mat::zeros(frame.rows, frame.cols, CV_8U);
+
+            vector<cv::Vec3f> circles;
+            //cv::Mat circles = cv::Mat();
+            cv::Scalar color = cv::Scalar(255, 0, 0);
+            cv::cvtColor(frame, frame, cv::COLOR_RGBA2GRAY, 0);
+            // crop timestamp and scale bar from bottom of video so Otsu works
+            Mat measureFrame = frame(Rect(0, 0, (float)frame.size().width - 1.0f, ((float)frame.size().height * 0.875f) - 1));
+            if (g_threshold == -1) {
+                double threshold = cv::threshold(measureFrame, measureFrame, 100, 255, cv::THRESH_OTSU);
+            }
+            else { //25
+                double threshold = cv::threshold(measureFrame, measureFrame, g_threshold, 255, THRESH_BINARY);
+            }
+            cv::HoughCircles(measureFrame, circles, cv::HOUGH_GRADIENT, 3,
+                10, 100, 50,
+                measureFrame.rows / 10, measureFrame.rows / 4);
+            cv::cvtColor(frame, frame, cv::COLOR_GRAY2RGB, 0);
+            validFrame = true;
+            // draw 2 best circles
+            // Take 2 best circles from Hough array and figure out which is which
+            if (circles.size() < 2) continue;
+            if (g_firstframe) {
+                c1 = circles[0];
+                c2 = circles[1];
+                c1Last = c1;
+                c2Last = c2;
+
+                if (circlesInsideEachOther(c1, c2)) {
+                    validFrame = false;
                 }
-                process(c1, c2);
 
-                g_firstframe = false;
-            }
-        }
-        else {
-            if (circlesInsideEachOther(circles[0], circles[1])) {
-                validFrame = false;
-            }
+                if (validFrame) {
+                    // make sure c2 is rightmost circle
+                    if (c1[0] > c2[0]) {
+                        Vec3i c3 = c2; c2 = c1; c1 = c3;
+                    }
+                    process(c1, c2);
 
-            if (validFrame) {
-                c1Last = c1; c2Last = c2;
-                c1 = circles[0]; c2 = circles[1];
-
-                separatorLineLast = separatorLine;
-                separatorLine = getSeparatorLine(Point(c1[0], c1[1]), Point(c2[0], c2[1]));
-
-                // make sure c2 is rightmost circle
-                if (c1[0] > c2[0]) {
-                    Vec3i c3 = c2; c2 = c1; c1 = c3;
+                    g_firstframe = false;
                 }
-                process(c1, c2);
             }
+            else {
+                if (circlesInsideEachOther(circles[0], circles[1])) {
+                    validFrame = false;
+                }
+
+                if (validFrame) {
+                    c1Last = c1; c2Last = c2;
+                    c1 = circles[0]; c2 = circles[1];
+
+                    separatorLineLast = separatorLine;
+                    separatorLine = getSeparatorLine(Point(c1[0], c1[1]), Point(c2[0], c2[1]));
+
+                    // make sure c2 is rightmost circle
+                    if (c1[0] > c2[0]) {
+                        Vec3i c3 = c2; c2 = c1; c1 = c3;
+                    }
+                    process(c1, c2);
+                }
+            }
+
+            // draw the circle centers
+            cv::circle(frame, Point(c1[0], c1[1]), 3, Scalar(0, 255, 0), -1, 8, 0);
+            cv::circle(originalFrame, Point(c1[0], c1[1]), 3, Scalar(0, 255, 0), -1, 8, 0);
+            cv::circle(frame, Point(c2[0], c2[1]), 3, Scalar(0, 255, 0), -1, 8, 0);
+            cv::circle(originalFrame, Point(c2[0], c2[1]), 3, Scalar(0, 255, 0), -1, 8, 0);
+            // draw the circle outlines
+            cv::circle(frame, Point(c1[0], c1[1]), c1[2], Scalar(0, 0, 255), 3, 8, 0);
+            cv::circle(originalFrame, Point(c1[0], c1[1]), c1[2], Scalar(0, 0, 255), 3, 8, 0);
+            cv::circle(frame, Point(c2[0], c2[1]), c2[2], Scalar(255, 0, 0), 3, 8, 0);
+            cv::circle(originalFrame, Point(c2[0], c2[1]), c2[2], Scalar(255, 0, 0), 3, 8, 0);
+
+
+            //draw separator line
+            cv::line(frame, Point(separatorLine[0], separatorLine[1]), Point(separatorLine[2], separatorLine[3]), Scalar(0, 255, 0), LINE_AA);
+            cv::line(frame, Point(c1[0], c1[1]), Point(c2[0], c2[1]), Scalar(0, 255, 0), LINE_AA);
+
+            //draw red X if the frame is invalid
+            if (!validFrame) {
+                cv::line(frame, Point(0, 0), Point(frame.cols, frame.rows), Scalar(0, 0, 255), LINE_AA);
+                cv::line(frame, Point(frame.cols, 0), Point(0, frame.rows), Scalar(0, 0, 255), LINE_AA);
+                cv::line(originalFrame, Point(0, 0), Point(originalFrame.cols, originalFrame.rows), Scalar(0, 0, 255), LINE_AA);
+                cv::line(originalFrame, Point(originalFrame.cols, 0), Point(0, originalFrame.rows), Scalar(0, 0, 255), LINE_AA);
+            }
+
+            // draw scale line in red
+            cv::line(frame, Point(g_scaleFrameStartX + g_scaleLineStartC, g_scaleFrameStartY + g_scaleLineStartR), Point(g_scaleFrameStartX + g_scaleLineEndC, g_scaleFrameStartY + g_scaleLineStartR), Scalar(0, 0, 255), LINE_AA);
+            cv::line(originalFrame, Point(g_scaleFrameStartX + g_scaleLineStartC, g_scaleFrameStartY + g_scaleLineStartR), Point(g_scaleFrameStartX + g_scaleLineEndC, g_scaleFrameStartY + g_scaleLineStartR), Scalar(0, 0, 255), LINE_AA);
+
+            // Display the resulting frame
+            int window_width = 800;
+            int window_height = 800;
+            cv::Mat resized_frame;
+
+            //change first param to frame for the working frame, originalFrame for export
+            cv::resize(frame, resized_frame, cv::Size(window_width, window_height), cv::INTER_LINEAR);
+            cv::imshow(g_inFileName, resized_frame);
+
+            // Press  ESC on keyboard to exit
+            char c = (char)cv::waitKey(25);
+            if (c == 27)
+                break;
         }
-
-        // draw the circle centers
-        cv::circle(frame, Point(c1[0], c1[1]), 3, Scalar(0, 255, 0), -1, 8, 0);
-        cv::circle(originalFrame, Point(c1[0], c1[1]), 3, Scalar(0, 255, 0), -1, 8, 0);
-        cv::circle(frame, Point(c2[0], c2[1]), 3, Scalar(0, 255, 0), -1, 8, 0);
-        cv::circle(originalFrame, Point(c2[0], c2[1]), 3, Scalar(0, 255, 0), -1, 8, 0);
-        // draw the circle outlines
-        cv::circle(frame, Point(c1[0], c1[1]), c1[2], Scalar(0, 0, 255), 3, 8, 0);
-        cv::circle(originalFrame, Point(c1[0], c1[1]), c1[2], Scalar(0, 0, 255), 3, 8, 0);
-        cv::circle(frame, Point(c2[0], c2[1]), c2[2], Scalar(255, 0, 0), 3, 8, 0);
-        cv::circle(originalFrame, Point(c2[0], c2[1]), c2[2], Scalar(255, 0, 0), 3, 8, 0);
-
-
-        //draw separator line
-        cv::line(frame, Point(separatorLine[0], separatorLine[1]), Point(separatorLine[2], separatorLine[3]), Scalar(0, 255, 0), LINE_AA);
-        cv::line(frame, Point(c1[0], c1[1]), Point(c2[0], c2[1]), Scalar(0, 255, 0), LINE_AA);
-
-        //draw red X if the frame is invalid
-        if (!validFrame) {
-            cv::line(frame, Point(0, 0), Point(frame.cols, frame.rows), Scalar(0, 0, 255), LINE_AA);
-            cv::line(frame, Point(frame.cols, 0), Point(0, frame.rows), Scalar(0, 0, 255), LINE_AA);
-            cv::line(originalFrame, Point(0, 0), Point(originalFrame.cols, originalFrame.rows), Scalar(0, 0, 255), LINE_AA);
-            cv::line(originalFrame, Point(originalFrame.cols, 0), Point(0, originalFrame.rows), Scalar(0, 0, 255), LINE_AA);
+        catch (std::exception& ex) {
+            std::cout << ex.what();
         }
-
-        // draw scale line in red
-        cv::line(frame, Point(g_scaleFrameStartX + g_scaleLineStartC, g_scaleFrameStartY + g_scaleLineStartR), Point(g_scaleFrameStartX + g_scaleLineEndC, g_scaleFrameStartY + g_scaleLineStartR), Scalar(0, 0, 255), LINE_AA);
-        cv::line(originalFrame, Point(g_scaleFrameStartX + g_scaleLineStartC, g_scaleFrameStartY + g_scaleLineStartR), Point(g_scaleFrameStartX + g_scaleLineEndC, g_scaleFrameStartY + g_scaleLineStartR), Scalar(0, 0, 255), LINE_AA);
-
-        // Display the resulting frame
-        int window_width = 800;
-        int window_height = 800;
-        cv::Mat resized_frame;
-
-        //change first param to frame for the working frame, originalFrame for export
-        cv::resize(frame, resized_frame, cv::Size(window_width, window_height), cv::INTER_LINEAR);
-        cv::imshow(g_inFileName, resized_frame);
-
-        // Press  ESC on keyboard to exit
-        char c = (char)cv::waitKey(25);
-        if (c == 27)
-            break;
     }
 
     // When everything done, release the video capture object
@@ -404,8 +424,13 @@ int main(int argc, char** argv)
 
     g_outfile.open(outfname, ios::out);
     g_outfile << "Time Stamp,Droplet 1 Radius,Droplet 1 Volume,Droplet 2 Radius,Droplet 2 Volume,Total Volume,DIB Radius,Contact Angle,Radial Distance,\n";
-
-    showVideoFromFile(fname);
+    
+    try {
+        showVideoFromFile(fname);
+    }
+    catch (std::exception & ex) {
+        std::cout << ex.what();
+    }
 
     g_outfile.close();
 
