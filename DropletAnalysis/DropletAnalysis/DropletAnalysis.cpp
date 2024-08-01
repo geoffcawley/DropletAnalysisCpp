@@ -1,5 +1,6 @@
 
 #include <iostream>
+#include <filesystem>
 #include <string>
 #include <vector>
 #include <fstream>
@@ -23,17 +24,21 @@ ofstream g_outfile;
 int g_threshold = -1;
 int g_frameskip = 1;
 
-string g_inFileName = "Droplet Analysis";
+std::filesystem::path g_inFileName = "";
+std::filesystem::path g_outDir = "";
+std::vector<string> g_filenames;
 
 int g_scaleFrameStartX, g_scaleFrameStartY, g_scaleFrameEndX, g_scaleFrameEndY;
 
 int g_scaleLineLength = 0;
 int g_scaleLineStartR, g_scaleLineStartC, g_scaleLineEndC;
 
+void getFilenames(const std::string& filename, std::vector<std::string>& lines);
 float sqDistance(Point p1, Point p2);
 Vec4i getSeparatorLine(Point p1, Point p2);
 float getSlope(Vec4i line);
 bool circlesInsideEachOther(Vec3i c1, Vec3i c2);
+bool isVideoFile(const std::string& filename);
 
 //Output headers:
 //Time Stamp, Adjusted Time, Droplet 1 Radius, Droplet 1 Volume, Droplet 2 Radius, Droplet 2 Volume, Total Volume, DIB Radius, Contact Angle, Radial Distance
@@ -49,11 +54,7 @@ bool process(Vec3i c1, Vec3i c2) {
     cout << endl;
 
     float timeStamp = (float)g_currentFrame / (float)g_framesPerSecond;
-    /*DEBUG*/ cout << "T=" << timeStamp << "\t";
-
-    if (timeStamp >= 37.0f) {
-        cout << "breaking here";
-    }
+    ///*DEBUG*/ cout << "T=" << timeStamp << "\t";
 
     bool twoDroplets = true;
     float rDistance = (float)sqrt((c2[0] - c1[0]) * (c2[0] - c1[0]) + (c2[1] - c1[1]) * (c2[1] - c1[1]));
@@ -67,8 +68,8 @@ bool process(Vec3i c1, Vec3i c2) {
     }
     if ((rDistance * rDistance) <= ((c1[2] - c2[2]) * (c1[2] - c2[2]))) twoDroplets = false;
 
-    /*DEBUG*/	if (twoDroplets) cout << "Two connected droplets\t";
-    /*DEBUG*/	else cout << "One droplet with contact bilayer\t";
+    ///*DEBUG*/	if (twoDroplets) cout << "Two connected droplets\t";
+    ///*DEBUG*/	else cout << "One droplet with contact bilayer\t";
 
     float small = c1[2]; float big = c2[2];
     big /= g_pixelsPerUnit;	small /= g_pixelsPerUnit;	//needed for volume calculations
@@ -81,6 +82,7 @@ bool process(Vec3i c1, Vec3i c2) {
         radialDistance = lr;
         //then do math
                             //the following is from that droplet shape paper
+        //Droplet Shape Analysis and Permeability Studies in Droplet Lipid Bilayers by Sanhita S. Dixit et. al.
         float thetab = (float)acos(
             (lr * lr - (small * small + big * big))
             / (2.0f * small * big)
@@ -170,7 +172,7 @@ void showImageFromFile(string fullImagePath) {
     cv::waitKey(0);
 }
 
-void showVideoFromFile(string fullPath) {
+void showVideoFromFile(string fullPath, string outVideoPath) {
     // Create a VideoCapture object and open the input file
     // If the input is the web camera, pass 0 instead of the video file name
     cv::VideoCapture cap(fullPath);
@@ -185,6 +187,11 @@ void showVideoFromFile(string fullPath) {
 
     Vec3i c1, c2, c1Last, c2Last;
     Vec4i separatorLine, separatorLineLast;
+
+    int window_width = 600;
+    int window_height = 600;
+
+    cv::VideoWriter outVid(outVideoPath, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'), g_framesPerSecond, cv::Size(window_width, window_height));
 
     while (cap.isOpened()) {
         try {
@@ -247,7 +254,7 @@ void showVideoFromFile(string fullPath) {
                 g_pixelsPerUnit = (float)g_scalePixels / (float)g_scaleUnits;
                 cv::line(scaleFrame, Point(g_scaleLineStartC, g_scaleLineStartR), Point(g_scaleLineEndC, g_scaleLineStartR), Scalar(0, 0, 255), LINE_AA);
 
-                imshow("Scale Frame", scaleFrame);
+                //imshow("Scale Frame", scaleFrame);
                 g_scaleSet = true;
             }
 
@@ -352,13 +359,13 @@ void showVideoFromFile(string fullPath) {
             cv::line(originalFrame, Point(g_scaleFrameStartX + g_scaleLineStartC, g_scaleFrameStartY + g_scaleLineStartR), Point(g_scaleFrameStartX + g_scaleLineEndC, g_scaleFrameStartY + g_scaleLineStartR), Scalar(0, 0, 255), LINE_AA);
 
             // Display the resulting frame
-            int window_width = 800;
-            int window_height = 800;
             cv::Mat resized_frame;
 
             //change first param to frame for the working frame, originalFrame for export
-            cv::resize(frame, resized_frame, cv::Size(window_width, window_height), cv::INTER_LINEAR);
-            cv::imshow(g_inFileName, resized_frame);
+            cv::resize(originalFrame, resized_frame, cv::Size(window_width, window_height), cv::INTER_LINEAR);
+            cv::imshow(fullPath, resized_frame);
+
+            outVid.write(resized_frame);
 
             // Press  ESC on keyboard to exit
             char c = (char)cv::waitKey(25);
@@ -380,13 +387,10 @@ void showVideoFromFile(string fullPath) {
 int main(int argc, char** argv)
 {
     if (argc < 2) return -1;
-    string fname = argv[1];
-    int n = fname.length();
-    while (0 < n && fname[--n] != '\\');
-    g_inFileName = fname.substr(n+1);
 
-    //if (argc >= 3) g_frameskip = atoi(argv[2]);
-    //if (argc >= 4) g_threshold = atoi(argv[3]);
+    g_inFileName = argv[1];
+    g_outDir = argv[2];
+
 
     for (int i = 2; i < argc; i++) {
         std::string arg(argv[i]);
@@ -407,6 +411,22 @@ int main(int argc, char** argv)
 
             g_scaleSet = true;
         }
+        if (arg == "--training-videos") {
+            g_scaleFrameStartX = 1350;
+            g_scaleFrameStartY = 1700;
+            g_scaleFrameEndX = 1450;
+            g_scaleFrameEndY = 1800;
+
+            g_scaleLineLength = 306;
+            g_scaleLineStartR = 1755;
+            g_scaleLineStartC = 1408;
+            g_scaleLineEndC = 1714;
+
+            g_scalePixels = g_scaleLineEndC - g_scaleLineStartC;
+            g_pixelsPerUnit = (float)g_scalePixels / (float)g_scaleUnits;
+
+            g_scaleSet = true;
+        }
         if (arg == "-s" || arg == "--frameskip") {
             //int fs = atoi(argv[++i]);
             g_frameskip = atoi(argv[++i]);
@@ -417,26 +437,73 @@ int main(int argc, char** argv)
         }
     }
 
-    VideoCapture video(fname);
-    g_framesPerSecond = (int)video.get(CAP_PROP_FPS);
-
-    string outfname = fname.substr(0, fname.find_last_of('.')) + ".csv";
-
-    g_outfile.open(outfname, ios::out);
-    g_outfile << "Time Stamp,Droplet 1 Radius,Droplet 1 Volume,Droplet 2 Radius,Droplet 2 Volume,Total Volume,DIB Radius,Contact Angle,Radial Distance,\n";
-    
-    try {
-        showVideoFromFile(fname);
+    if (g_inFileName.extension() == ".txt") {
+        getFilenames(g_inFileName.string(), g_filenames);
     }
-    catch (std::exception & ex) {
-        std::cout << ex.what();
+    else if (std::filesystem::is_directory(g_inFileName)) {
+        for (const auto& f : std::filesystem::directory_iterator(g_inFileName)) {
+            if (isVideoFile(f.path().string())) {
+                g_filenames.push_back(f.path().string());
+            }
+        }
     }
+    else {
+        g_filenames.push_back(g_inFileName.string());
+    }
+
+    for (const auto& f : g_filenames) {
+        VideoCapture video(f);
+        g_framesPerSecond = (int)video.get(CAP_PROP_FPS);
+        video.release();
+
+        try {
+            string csvname = std::filesystem::path(f).stem().string() + ".csv";
+            string outvideoname = std::filesystem::path(f).stem().string() + ".avi";
+            std::filesystem::path csvpath = g_outDir / csvname;
+            std::filesystem::path outvideopath = g_outDir / outvideoname;
+            g_outfile.open(csvpath.string(), ios::out);
+            g_outfile << "Time Stamp,Droplet 1 Radius,Droplet 1 Volume,Droplet 2 Radius,Droplet 2 Volume,Total Volume,DIB Radius,Contact Angle,Radial Distance,\n";
+            showVideoFromFile(f, outvideopath.string());
+        }
+        catch (std::exception& ex) {
+            std::cout << ex.what();
+        }
+        g_outfile.close();
+    }
+
 
     g_outfile.close();
 
     return 0;
 }
 
+bool isVideoFile(const std::string& filename) {
+    // Define a list of common video file extensions
+    const std::vector<std::string> videoExtensions = { ".mp4", ".avi", ".mov", ".mkv", ".flv", ".wmv", ".webm" };
+
+    // Get the file extension
+    std::string extension = std::filesystem::path(filename).extension().string();
+
+    // Convert to lower case for case-insensitive comparison
+    std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+
+    // Check if the extension is in the list of video extensions
+    return std::find(videoExtensions.begin(), videoExtensions.end(), extension) != videoExtensions.end();
+}
+
+void getFilenames(const std::string& filename, std::vector<std::string>& lines) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        throw std::runtime_error("Failed to open the file: " + filename);
+    }
+
+    std::string line;
+    while (std::getline(file, line)) {
+        lines.push_back(line);
+    }
+
+    file.close();
+}
 
 float sqDistance(Point p1, Point p2)
 {
